@@ -16,10 +16,14 @@ export function addDays(ms: number, n: number): number {
   return ms + n * DAY_MS;
 }
 
-export function todayISO(): string {
-  const n = new Date();
+/** แปลง Date (เวลาท้องถิ่น) เป็น yyyy-mm-dd */
+export function localDateToISO(n: Date): string {
   const p = (v: number) => String(v).padStart(2, '0');
   return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())}`;
+}
+
+export function todayISO(): string {
+  return localDateToISO(new Date());
 }
 
 export function weekday(ms: number): number {

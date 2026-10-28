@@ -1,8 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { HolidayManager } from './src/components/HolidayManager';
 import { Legend, ResultCard } from './src/components/ResultCard';
 import { HOLIDAYS, LAST_DATE } from './src/data/holidays';
+import { useCustomHolidays } from './src/hooks/useCustomHolidays';
 import { todayISO } from './src/lib/dates';
 import { findSuggestions, rank } from './src/lib/leave';
 import { colors } from './src/theme';
@@ -10,10 +12,13 @@ import { colors } from './src/theme';
 export default function App() {
   const [budget, setBudget] = useState(3);
   const [sortBy, setSortBy] = useState<'value' | 'date'>('value');
+  const [managing, setManaging] = useState(false);
+  const { custom, add, remove } = useCustomHolidays();
+  const holidays = useMemo(() => ({ ...HOLIDAYS, ...custom }), [custom]);
 
   const results = useMemo(
-    () => rank(findSuggestions(todayISO(), LAST_DATE, HOLIDAYS, budget), sortBy),
-    [budget, sortBy],
+    () => rank(findSuggestions(todayISO(), LAST_DATE, holidays, budget), sortBy),
+    [budget, sortBy, holidays],
   );
   const maxTotal = useMemo(() => Math.max(0, ...results.map((r) => r.totalDays)), [results]);
 
@@ -58,6 +63,9 @@ export default function App() {
                   <Text style={[styles.chipTxt, sortBy === k && styles.chipTxtOn]}>{label}</Text>
                 </Pressable>
               ))}
+              <Pressable onPress={() => setManaging(true)} style={[styles.chip, styles.chipAdd]}>
+                <Text style={styles.chipAddTxt}>+ วันหยุดของฉัน{Object.keys(custom).length ? ` (${Object.keys(custom).length})` : ''}</Text>
+              </Pressable>
             </View>
             <Legend />
           </View>
@@ -65,6 +73,7 @@ export default function App() {
         ListEmptyComponent={<Text style={styles.sub}>ไม่พบช่วงที่ลงตัวพอดี ลองเปลี่ยนจำนวนวันลาดูนะ</Text>}
         renderItem={({ item }) => <ResultCard item={item} best={sortBy === 'value' && item.totalDays === maxTotal} />}
       />
+      <HolidayManager visible={managing} custom={custom} onAdd={add} onRemove={remove} onClose={() => setManaging(false)} />
       <StatusBar style="dark" />
     </SafeAreaView>
   );
@@ -91,9 +100,11 @@ const styles = StyleSheet.create({
   stepTxt: { color: '#fff', fontSize: 28, fontWeight: '600' },
   stepMid: { alignItems: 'center' },
   stepNum: { fontSize: 40, fontWeight: '800', color: colors.text },
-  chips: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   chipOn: { backgroundColor: colors.text, borderColor: colors.text },
   chipTxt: { color: colors.text, fontSize: 14 },
   chipTxtOn: { color: '#fff' },
+  chipAdd: { borderColor: colors.leave },
+  chipAddTxt: { color: colors.leave, fontSize: 14, fontWeight: '600' },
 });
