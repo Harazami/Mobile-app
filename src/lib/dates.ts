@@ -46,3 +46,17 @@ export function formatWithYear(ms: number): string {
   const d = new Date(ms);
   return `${formatShort(ms)} ${String((d.getUTCFullYear() + 543) % 100).padStart(2, '0')}`;
 }
+
+export const THAI_MONTHS_FULL = [
+  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
+];
+
+export function addDaysISO(iso: string, n: number): string {
+  return toISO(addDays(parseISO(iso), n));
+}
+
+/** เช่น "ธันวาคม 2569" */
+export function monthTitle(year: number, month: number): string {
+  return `${THAI_MONTHS_FULL[month]} ${year + 543}`;
+}

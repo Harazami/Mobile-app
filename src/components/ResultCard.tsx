@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatWithYear, THAI_WEEKDAYS } from '../lib/dates';
 import type { DayKind, Suggestion } from '../lib/leave';
 import { colors } from '../theme';
@@ -9,11 +9,11 @@ const KIND_COLOR: Record<DayKind, string> = {
   holiday: colors.holiday,
 };
 
-export function ResultCard({ item, best }: { item: Suggestion; best: boolean }) {
+export function ResultCard({ item, best, onPress }: { item: Suggestion; best: boolean; onPress?: () => void }) {
   const holidays = Array.from(new Set(item.days.filter((d) => d.holidayName).map((d) => d.holidayName)));
 
   return (
-    <View style={[styles.card, best && styles.cardBest]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, best && styles.cardBest, pressed && styles.pressed]}>
       <View style={styles.header}>
         <Text style={styles.range}>
           {formatWithYear(item.start)} – {formatWithYear(item.end)}
@@ -35,7 +35,7 @@ export function ResultCard({ item, best }: { item: Suggestion; best: boolean }) 
         ))}
       </View>
       {holidays.length > 0 && <Text style={styles.muted}>มีวันหยุด: {holidays.join(', ')}</Text>}
-    </View>
+    </Pressable>
   );
 }
 
@@ -44,6 +44,7 @@ export function Legend() {
     [colors.leave, 'วันที่ต้องลา'],
     [colors.holiday, 'วันหยุดนักขัตฤกษ์'],
     [colors.weekend, 'เสาร์-อาทิตย์'],
+    [colors.preferred, 'ช่วงที่อยากลา'],
   ];
   return (
     <View style={styles.legend}>
@@ -68,6 +69,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   cardBest: { borderColor: colors.leave, borderWidth: 2 },
+  pressed: { opacity: 0.7 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   range: { fontSize: 17, fontWeight: '700', color: colors.text },
   badge: {

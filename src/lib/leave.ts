@@ -1,4 +1,5 @@
 import { addDays, isWeekend, parseISO, toISO } from './dates';
+import { DateRange, inRanges } from './ranges';
 
 export type DayKind = 'work' | 'weekend' | 'holiday';
 
@@ -12,6 +13,8 @@ export type Day = {
 };
 
 export type Suggestion = {
+  /** ไม่ซ้ำกัน: วันเริ่ม_วันจบ */
+  id: string;
   start: number;
   end: number;
   totalDays: number;
@@ -29,15 +32,17 @@ export function classify(ms: number, holidays: Record<string, string>): { kind: 
 }
 
 /**
- * หาช่วงหยุดต่อเนื่องที่ใช้วันลา "พอดี" leaveBudget วัน
- * ช่วงต้องเริ่มและจบด้วยวันหยุดอยู่แล้ว (ไม่เสียวันลาที่ขอบ)
- * และครอบคลุมช่วงสูงสุด (วันก่อนหน้า/ถัดไปเป็นวันทำงาน)
+ * หาแผนลาที่ได้หยุดต่อเนื่อง โดยใช้วันลาไม่เกิน leaveBudget วัน
+ * - ช่วงต้องยาวสุดทั้งสองฝั่ง (วันก่อน/หลังช่วงเป็นวันทำงาน) และมีวันหยุดอยู่ในช่วงด้วย
+ * - ถ้าระบุ preferred วันลาทุกวันต้องอยู่ในช่วงที่อยากลา
+ * - แผนที่ทับกันจะเก็บไว้เฉพาะที่คุ้มกว่า (หยุดยาวกว่า หรือใช้วันลาน้อยกว่า)
  */
 export function findSuggestions(
   fromISO: string,
   toISOStr: string,
   holidays: Record<string, string>,
   leaveBudget: number,
+  preferred: DateRange[] = [],
 ): Suggestion[] {
   const from = parseISO(fromISO);
   const to = parseISO(toISOStr);
@@ -52,10 +57,8 @@ export function findSuggestions(
   }
   const off = (i: number) => days[i].kind !== 'work';
 
-  const out: Suggestion[] = [];
+  const candidates: Suggestion[] = [];
   for (let s = 0; s < total; s++) {
-    // เริ่มที่วันหยุดแรกของบล็อกวันหยุด
-    if (!off(s)) continue;
     if (s > 0 && off(s - 1)) continue;
     let used = 0;
     for (let e = s; e < total; e++) {
@@ -63,26 +66,40 @@ export function findSuggestions(
         used++;
         if (used > leaveBudget) break;
       }
-      const endsOff = off(e);
-      const nextWork = e + 1 < total && !off(e + 1);
-      if (used === leaveBudget && endsOff && (nextWork || e === total - 1)) {
-        const slice = days.slice(s, e + 1).map((d) => ({ ...d, isLeave: d.kind === 'work' }));
-        out.push({
-          start: slice[0].ms,
-          end: slice[slice.length - 1].ms,
-          totalDays: slice.length,
-          leaveDays: used,
-          efficiency: slice.length / used,
-          days: slice,
-        });
-      }
+      const maximal = e === total - 1 || !off(e + 1);
+      if (!maximal || used === 0 || e - s + 1 === used) continue;
+      const slice = days.slice(s, e + 1).map((d) => ({ ...d, isLeave: d.kind === 'work' }));
+      const sug: Suggestion = {
+        id: `${slice[0].iso}_${slice[slice.length - 1].iso}`,
+        start: slice[0].ms,
+        end: slice[slice.length - 1].ms,
+        totalDays: slice.length,
+        leaveDays: used,
+        efficiency: slice.length / used,
+        days: slice,
+      };
+      if (leaveWithin(sug, preferred)) candidates.push(sug);
     }
   }
-  return out;
+
+  // เรียงจากดีสุด แล้วตัดแผนที่ทับกับแผนที่ดีกว่าและไม่ได้ประหยัดวันลากว่า
+  candidates.sort((a, b) => b.totalDays - a.totalDays || a.leaveDays - b.leaveDays || a.start - b.start);
+  const kept: Suggestion[] = [];
+  for (const c of candidates) {
+    const dominated = kept.some((k) => k.start <= c.end && c.start <= k.end && k.leaveDays <= c.leaveDays);
+    if (!dominated) kept.push(c);
+  }
+  return kept;
 }
 
 export function rank(list: Suggestion[], by: 'value' | 'date'): Suggestion[] {
   const c = [...list];
   if (by === 'date') return c.sort((a, b) => a.start - b.start);
-  return c.sort((a, b) => b.totalDays - a.totalDays || a.start - b.start);
+  return c.sort((a, b) => b.totalDays - a.totalDays || a.leaveDays - b.leaveDays || a.start - b.start);
+}
+
+/** วันลาทุกวันต้องอยู่ในช่วงที่อยากลา (ถ้าไม่ได้เลือกช่วง = ผ่านหมด) */
+export function leaveWithin(s: Suggestion, ranges: DateRange[]): boolean {
+  if (ranges.length === 0) return true;
+  return s.days.every((d) => !d.isLeave || inRanges(d.iso, ranges));
 }

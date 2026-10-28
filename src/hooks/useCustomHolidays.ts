@@ -1,40 +1,34 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useState } from 'react';
-
-const KEY = 'customHolidays.v1';
+import { useCallback } from 'react';
+import { DateRange, expandRange } from '../lib/ranges';
+import { usePersistentState } from './usePersistentState';
 
 export type CustomHolidays = Record<string, string>;
 
 export function useCustomHolidays() {
-  const [custom, setCustom] = useState<CustomHolidays>({});
-  const [loaded, setLoaded] = useState(false);
+  const [custom, setCustom] = usePersistentState<CustomHolidays>('customHolidays.v1', {});
 
-  useEffect(() => {
-    AsyncStorage.getItem(KEY)
-      .then((raw) => {
-        if (raw) setCustom(JSON.parse(raw));
-      })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
-  }, []);
-
-  const persist = useCallback((next: CustomHolidays) => {
-    setCustom(next);
-    AsyncStorage.setItem(KEY, JSON.stringify(next)).catch(() => {});
-  }, []);
-
-  const add = useCallback(
-    (iso: string, name: string) => persist({ ...custom, [iso]: name.trim() || 'วันหยุดของฉัน' }),
-    [custom, persist],
-  );
-
-  const remove = useCallback(
-    (iso: string) => {
-      const { [iso]: _, ...rest } = custom;
-      persist(rest);
+  const addRange = useCallback(
+    (range: DateRange, name: string) => {
+      const label = name.trim() || 'วันหยุดของฉัน';
+      setCustom((prev) => {
+        const next = { ...prev };
+        for (const iso of expandRange(range)) next[iso] = label;
+        return next;
+      });
     },
-    [custom, persist],
+    [setCustom],
   );
 
-  return { custom, loaded, add, remove };
+  const removeDays = useCallback(
+    (days: string[]) => {
+      setCustom((prev) => {
+        const next = { ...prev };
+        for (const iso of days) delete next[iso];
+        return next;
+      });
+    },
+    [setCustom],
+  );
+
+  return { custom, addRange, removeDays };
 }
